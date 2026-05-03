@@ -138,6 +138,8 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
 
     uint32_t gnb_id;
     char ng_setup_amf_name[256];
+    bool challenge_requested = false;
+    bool challenge_response_attached = false;
 
     ogs_assert(gnb);
     ogs_assert(gnb->sctp.sock);
@@ -448,12 +450,14 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
             const char *challenge =
                 ran_node_name + strlen(AMF_GNB_AUTH_CHALLENGE_PREFIX);
             uint32_t response_hash;
+            challenge_requested = true;
 
             response_hash = ogs_hashfunc_default(AMF_GNB_AUTH_PASSWORD, NULL) ^
                 ogs_hashfunc_default(challenge, NULL);
             ogs_snprintf(ng_setup_amf_name, sizeof(ng_setup_amf_name),
                     "%s%s:%08x", amf_self()->amf_name,
                     AMF_GNB_AUTH_AMFNAME_PREFIX, response_hash);
+            challenge_response_attached = true;
             ogs_info("Applied AMF->gNB challenge response during NGSetup");
         }
     }
@@ -461,6 +465,11 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     r = ngap_send_ng_setup_response(gnb, ng_setup_amf_name);
     ogs_expect(r == OGS_OK);
     ogs_assert(r != OGS_ERROR);
+
+    if (challenge_requested == true && challenge_response_attached == true) {
+        ogs_info("AMF challenge-response success indicator: response sent to gNB[0x%x]",
+                gnb_id);
+    }
 
 #undef AMF_GNB_AUTH_CHALLENGE_PREFIX
 #undef AMF_GNB_AUTH_AMFNAME_PREFIX
