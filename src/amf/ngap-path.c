@@ -304,7 +304,7 @@ int ngap_send_ng_setup_response(amf_gnb_t *gnb)
 
     ogs_debug("NG-Setup response");
 
-    ngap_buffer = ngap_build_ng_setup_response();
+    ngap_buffer = ngap_build_ng_setup_response(gnb);
     if (!ngap_buffer) {
         ogs_error("ngap_build_ng_setup_response() failed");
         return OGS_ERROR;

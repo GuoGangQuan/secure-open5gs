@@ -146,6 +146,7 @@ typedef struct amf_gnb_s {
 
     struct {
         bool ng_setup_success;  /* gNB NGAP Setup complete successfuly */
+        bool challenge_verified; /* gNB provided expected setup challenge */
     } state;
 
     int             max_num_of_ostreams;/* SCTP Max num of outbound streams */

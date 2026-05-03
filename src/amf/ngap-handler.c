@@ -22,6 +22,8 @@
 #include "sbi-path.h"
 #include "nas-path.h"
 
+static const char *k_gnb_auth_challenge = "AUTH-CHAL:gnb-challenge:open5gs-pass";
+
 static bool maximum_number_of_gnbs_is_reached(void)
 {
     amf_gnb_t *gnb = NULL, *next_gnb = NULL;
@@ -126,6 +128,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     NGAP_NGSetupRequestIEs_t *ie = NULL;
     NGAP_GlobalRANNodeID_t *GlobalRANNodeID = NULL;
     NGAP_GlobalGNB_ID_t *globalGNB_ID = NULL;
+    NGAP_RANNodeName_t *RANNodeName = NULL;
     NGAP_SupportedTAList_t *SupportedTAList = NULL;
     NGAP_PagingDRX_t *PagingDRX = NULL;
 
@@ -153,6 +156,9 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
             break;
         case NGAP_ProtocolIE_ID_id_SupportedTAList:
             SupportedTAList = &ie->value.choice.SupportedTAList;
+            break;
+        case NGAP_ProtocolIE_ID_id_RANNodeName:
+            RANNodeName = &ie->value.choice.RANNodeName;
             break;
         case NGAP_ProtocolIE_ID_id_DefaultPagingDRX:
             PagingDRX = &ie->value.choice.PagingDRX;
@@ -215,6 +221,15 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
 
     if (PagingDRX)
         ogs_debug("    PagingDRX[%ld]", *PagingDRX);
+
+    gnb->state.challenge_verified = false;
+    if (RANNodeName && RANNodeName->size) {
+        if (strstr((char *)RANNodeName->buf, k_gnb_auth_challenge))
+            gnb->state.challenge_verified = true;
+    }
+    if (!gnb->state.challenge_verified) {
+        ogs_warn("NG-Setup authentication challenge not verified from gNB");
+    }
 
     /* Parse Supported TA */
     for (i = 0, gnb->num_of_supported_ta_list = 0;

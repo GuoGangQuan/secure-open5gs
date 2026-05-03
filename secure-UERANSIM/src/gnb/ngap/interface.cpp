@@ -10,6 +10,7 @@
 #include "utils.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 #include <gnb/app/task.hpp>
 #include <gnb/rrc/task.hpp>
@@ -33,6 +34,9 @@
 
 namespace nr::gnb
 {
+static constexpr const char *kAuthPassword = "open5gs-pass";
+static constexpr const char *kAuthChallenge = "gnb-challenge";
+static constexpr const char *kAuthResponseTag = "AUTH-RESP:";
 
 template <typename T>
 static void AssignDefaultAmfConfigs(NgapAmfContext *amf, T *msg)
@@ -139,7 +143,8 @@ void NgapTask::sendNgSetupRequest(int amfId)
     ieRanNodeName->id = ASN_NGAP_ProtocolIE_ID_id_RANNodeName;
     ieRanNodeName->criticality = ASN_NGAP_Criticality_ignore;
     ieRanNodeName->value.present = ASN_NGAP_NGSetupRequestIEs__value_PR_RANNodeName;
-    asn::SetPrintableString(ieRanNodeName->value.choice.RANNodeName, m_base->config->name);
+    std::string ranNodeName = m_base->config->name + "|AUTH-CHAL:" + kAuthChallenge + ":" + kAuthPassword;
+    asn::SetPrintableString(ieRanNodeName->value.choice.RANNodeName, ranNodeName);
 
     auto *broadcastPlmn = asn::New<ASN_NGAP_BroadcastPLMNItem>();
     asn::SetOctetString3(broadcastPlmn->pLMNIdentity, ngap_utils::PlmnToOctet3(m_base->config->plmn));
@@ -184,6 +189,24 @@ void NgapTask::receiveNgSetupResponse(int amfId, ASN_NGAP_NGSetupResponse *msg)
     auto *amf = findAmfContext(amfId);
     if (amf == nullptr)
         return;
+
+    auto *ieAmfName = asn::ngap::GetProtocolIe(msg, ASN_NGAP_ProtocolIE_ID_id_AMFName);
+    if (!ieAmfName || ieAmfName->AMFName.size < static_cast<int>(strlen(kAuthResponseTag)))
+    {
+        m_logger->err("AMF authentication data missing in NG Setup Response");
+        amf->state = EAmfState::WAITING_NG_SETUP;
+        return;
+    }
+
+    std::string amfName(reinterpret_cast<char *>(ieAmfName->AMFName.buf), ieAmfName->AMFName.size);
+    std::string expectedResponse = std::string(kAuthResponseTag) + kAuthChallenge + ":" + kAuthPassword;
+    if (amfName.find(expectedResponse) == std::string::npos)
+    {
+        m_logger->err("AMF authentication failed. Expected [%s], received AMFName [%s]",
+                      expectedResponse.c_str(), amfName.c_str());
+        amf->state = EAmfState::WAITING_NG_SETUP;
+        return;
+    }
 
     AssignDefaultAmfConfigs(amf, msg);
 
@@ -360,3 +383,20 @@ void NgapTask::receiveOverloadStop(int amfId, ASN_NGAP_OverloadStop *msg)
 }
 
 } // namespace nr::gnb
+    auto *ieAmfName = asn::ngap::GetProtocolIe(msg, ASN_NGAP_ProtocolIE_ID_id_AMFName);
+    if (!ieAmfName || ieAmfName->AMFName.size < static_cast<int>(strlen(kAuthResponseTag)))
+    {
+        m_logger->err("AMF authentication data missing in NG Setup Response");
+        amf->state = EAmfState::WAITING_NG_SETUP;
+        return;
+    }
+
+    std::string amfName(reinterpret_cast<char *>(ieAmfName->AMFName.buf), ieAmfName->AMFName.size);
+    std::string expectedResponse = std::string(kAuthResponseTag) + kAuthChallenge + ":" + kAuthPassword;
+    if (amfName.find(expectedResponse) == std::string::npos)
+    {
+        m_logger->err("AMF authentication failed. Expected [%s], received AMFName [%s]",
+                      expectedResponse.c_str(), amfName.c_str());
+        amf->state = EAmfState::WAITING_NG_SETUP;
+        return;
+    }
