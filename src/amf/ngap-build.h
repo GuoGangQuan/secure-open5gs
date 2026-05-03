@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-ogs_pkbuf_t *ngap_build_ng_setup_response(void);
+ogs_pkbuf_t *ngap_build_ng_setup_response(const char *amf_name_override);
 ogs_pkbuf_t *ngap_build_ng_setup_failure(
     NGAP_Cause_PR group, long cause, long time_to_wait);
 

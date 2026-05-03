@@ -295,7 +295,7 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
     }
 }
 
-int ngap_send_ng_setup_response(amf_gnb_t *gnb)
+int ngap_send_ng_setup_response(amf_gnb_t *gnb, const char *amf_name_override)
 {
     int rv;
     ogs_pkbuf_t *ngap_buffer;
@@ -304,7 +304,7 @@ int ngap_send_ng_setup_response(amf_gnb_t *gnb)
 
     ogs_debug("NG-Setup response");
 
-    ngap_buffer = ngap_build_ng_setup_response();
+    ngap_buffer = ngap_build_ng_setup_response(amf_name_override);
     if (!ngap_buffer) {
         ogs_error("ngap_build_ng_setup_response() failed");
         return OGS_ERROR;
