@@ -70,7 +70,7 @@ static void ngap_build_plmn_support_list(NGAP_PLMNSupportList_t *PLMNSupportList
     }
 }
 
-ogs_pkbuf_t *ngap_build_ng_setup_response(void)
+ogs_pkbuf_t *ngap_build_ng_setup_response(const char *amf_name_override)
 {
     int i;
 
@@ -135,8 +135,10 @@ ogs_pkbuf_t *ngap_build_ng_setup_response(void)
 
     PLMNSupportList = &ie->value.choice.PLMNSupportList;
 
-    ogs_asn_buffer_to_OCTET_STRING((char*)amf_self()->amf_name,
-            strlen(amf_self()->amf_name), AMFName);
+    ogs_asn_buffer_to_OCTET_STRING((char*)(amf_name_override ?
+                amf_name_override : amf_self()->amf_name),
+            strlen(amf_name_override ?
+                amf_name_override : amf_self()->amf_name), AMFName);
 
     for (i = 0; i < amf_self()->num_of_served_guami; i++) {
         NGAP_ServedGUAMIItem_t *ServedGUAMIItem = NULL;

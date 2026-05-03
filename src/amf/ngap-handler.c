@@ -117,6 +117,9 @@ static bool s_nssai_is_found(amf_gnb_t *gnb)
 
 void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
 {
+#define AMF_GNB_AUTH_CHALLENGE_PREFIX "AUTH_CHAL:"
+#define AMF_GNB_AUTH_AMFNAME_PREFIX "AUTH_RESP:"
+#define AMF_GNB_AUTH_PASSWORD "open5gs-amf-gnb-secret"
     char buf[OGS_ADDRSTRLEN];
     int i, j, k, r;
 
@@ -126,6 +129,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     NGAP_NGSetupRequestIEs_t *ie = NULL;
     NGAP_GlobalRANNodeID_t *GlobalRANNodeID = NULL;
     NGAP_GlobalGNB_ID_t *globalGNB_ID = NULL;
+    NGAP_RANNodeName_t *RANNodeName = NULL;
     NGAP_SupportedTAList_t *SupportedTAList = NULL;
     NGAP_PagingDRX_t *PagingDRX = NULL;
 
@@ -133,6 +137,9 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     long cause = 0;
 
     uint32_t gnb_id;
+    char ng_setup_amf_name[256];
+    bool challenge_requested = false;
+    bool challenge_response_attached = false;
 
     ogs_assert(gnb);
     ogs_assert(gnb->sctp.sock);
@@ -153,6 +160,9 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
             break;
         case NGAP_ProtocolIE_ID_id_SupportedTAList:
             SupportedTAList = &ie->value.choice.SupportedTAList;
+            break;
+        case NGAP_ProtocolIE_ID_id_RANNodeName:
+            RANNodeName = &ie->value.choice.RANNodeName;
             break;
         case NGAP_ProtocolIE_ID_id_DefaultPagingDRX:
             PagingDRX = &ie->value.choice.PagingDRX;
@@ -426,9 +436,44 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     amf_gnb_set_gnb_id(gnb, gnb_id);
 
     gnb->state.ng_setup_success = true;
-    r = ngap_send_ng_setup_response(gnb);
+    memset(ng_setup_amf_name, 0, sizeof(ng_setup_amf_name));
+    ogs_cpystrn(ng_setup_amf_name, amf_self()->amf_name, sizeof(ng_setup_amf_name));
+    if (RANNodeName && RANNodeName->buf && RANNodeName->size > 0) {
+        char ran_node_name[OGS_MAX_DNN_LEN+1];
+
+        memset(ran_node_name, 0, sizeof(ran_node_name));
+        memcpy(ran_node_name, RANNodeName->buf,
+                ogs_min((size_t)RANNodeName->size, sizeof(ran_node_name)-1));
+
+        if (strncmp(ran_node_name, AMF_GNB_AUTH_CHALLENGE_PREFIX,
+                    strlen(AMF_GNB_AUTH_CHALLENGE_PREFIX)) == 0) {
+            const char *challenge =
+                ran_node_name + strlen(AMF_GNB_AUTH_CHALLENGE_PREFIX);
+            uint32_t response_hash;
+            challenge_requested = true;
+
+            response_hash = ogs_hashfunc_default(AMF_GNB_AUTH_PASSWORD, NULL) ^
+                ogs_hashfunc_default(challenge, NULL);
+            ogs_snprintf(ng_setup_amf_name, sizeof(ng_setup_amf_name),
+                    "%s%s:%08x", amf_self()->amf_name,
+                    AMF_GNB_AUTH_AMFNAME_PREFIX, response_hash);
+            challenge_response_attached = true;
+            ogs_info("Applied AMF->gNB challenge response during NGSetup");
+        }
+    }
+
+    r = ngap_send_ng_setup_response(gnb, ng_setup_amf_name);
     ogs_expect(r == OGS_OK);
     ogs_assert(r != OGS_ERROR);
+
+    if (challenge_requested == true && challenge_response_attached == true) {
+        ogs_info("AMF challenge-response success indicator: response sent to gNB[0x%x]",
+                gnb_id);
+    }
+
+#undef AMF_GNB_AUTH_CHALLENGE_PREFIX
+#undef AMF_GNB_AUTH_AMFNAME_PREFIX
+#undef AMF_GNB_AUTH_PASSWORD
 }
 
 void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)

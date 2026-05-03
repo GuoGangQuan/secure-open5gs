@@ -45,7 +45,7 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
         NGAP_ProcedureCode_t procedureCode, NGAP_NAS_PDU_t *nasPdu);
 int ngap_send_to_5gsm(amf_ue_t *amf_ue, ogs_pkbuf_t *esmbuf);
 
-int ngap_send_ng_setup_response(amf_gnb_t *gnb);
+int ngap_send_ng_setup_response(amf_gnb_t *gnb, const char *amf_name_override);
 int ngap_send_ng_setup_failure(
         amf_gnb_t *gnb, NGAP_Cause_PR group, long cause);
 int ngap_send_amf_configuration_update(amf_gnb_t *gnb);
