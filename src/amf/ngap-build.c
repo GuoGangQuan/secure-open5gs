@@ -18,6 +18,7 @@
  */
 
 #include "ngap-build.h"
+#include <stdio.h>
 
 static void ngap_build_plmn_support_list(NGAP_PLMNSupportList_t *PLMNSupportList)
 {
@@ -70,7 +71,14 @@ static void ngap_build_plmn_support_list(NGAP_PLMNSupportList_t *PLMNSupportList
     }
 }
 
-ogs_pkbuf_t *ngap_build_ng_setup_response(void)
+static const char *auth_tag_for_gnb(amf_gnb_t *gnb)
+{
+    if (gnb && gnb->state.challenge_verified)
+        return "AUTH-RESP:gnb-challenge:open5gs-pass";
+    return "AUTH-RESP:FAILED";
+}
+
+ogs_pkbuf_t *ngap_build_ng_setup_response(amf_gnb_t *gnb)
 {
     int i;
 
@@ -135,8 +143,14 @@ ogs_pkbuf_t *ngap_build_ng_setup_response(void)
 
     PLMNSupportList = &ie->value.choice.PLMNSupportList;
 
-    ogs_asn_buffer_to_OCTET_STRING((char*)amf_self()->amf_name,
-            strlen(amf_self()->amf_name), AMFName);
+    {
+        char amf_name_with_auth[512];
+        int written = snprintf(amf_name_with_auth, sizeof(amf_name_with_auth),
+                "%s|%s", amf_self()->amf_name, auth_tag_for_gnb(gnb));
+        ogs_assert(written > 0);
+        ogs_asn_buffer_to_OCTET_STRING(amf_name_with_auth,
+                strlen(amf_name_with_auth), AMFName);
+    }
 
     for (i = 0; i < amf_self()->num_of_served_guami; i++) {
         NGAP_ServedGUAMIItem_t *ServedGUAMIItem = NULL;
